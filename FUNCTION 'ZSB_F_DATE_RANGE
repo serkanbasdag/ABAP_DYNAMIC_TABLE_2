@@ -1,0 +1,184 @@
+FUNCTION zsb_f_date_range.
+*"----------------------------------------------------------------------
+*"*"Local Interface:
+*"  TABLES
+*"      IT_YEAR STRUCTURE  ZSB_T_DATE_RANGE OPTIONAL
+*"      IT_MONAT STRUCTURE  ZSB_T_MONAT_RANG OPTIONAL
+*"      IT_BUKRS STRUCTURE  ZSB_T_BUKRS_RANG OPTIONAL
+*"      ET_YEAR STRUCTURE  ZSB_T_YEAR OPTIONAL
+*"      ET_MONAT STRUCTURE  ZSB_T_MONAT OPTIONAL
+*"      ET_BUKRS STRUCTURE  ZSB_T_BUKRS OPTIONAL
+*"----------------------------------------------------------------------
+
+  DATA: lt_data_gj   TYPE zsb_t_date_range,
+        lt_data_mn   TYPE zsb_t_monat_rang,
+        lt_data_bk   TYPE zsb_t_bukrs_rang,
+        lv_btween    TYPE i.
+
+  TYPES: BEGIN OF ty_data,
+    bukrs TYPE t001-bukrs,
+   END OF ty_data.
+     DATA: ls_data TYPE ty_data.
+
+  TYPES: BEGIN OF ty_year,
+    YIL TYPE bkpf-GJAHR,
+   END OF ty_year.
+     DATA: ls_year TYPE ty_year.
+
+   TYPES: BEGIN OF ty_monat,
+    AY TYPE bkpf-MONAT,
+   END OF ty_monat.
+   DATA: ls_monat TYPE ty_monat.
+
+    TYPES: BEGIN OF ty_bukrs,
+    BUKRS TYPE bkpf-bukrs,
+   END OF ty_bukrs.
+   DATA: ls_bukrs TYPE ty_bukrs.
+
+  CLEAR: lt_data_gj, lt_data_mn, ls_year, ls_monat, lt_data_bk,
+  ls_bukrs, lv_btween.
+
+
+  LOOP AT it_bukrs INTO lt_data_bk.
+    IF lt_data_bk-sign EQ 'I'.
+      IF lt_data_bk-options EQ 'BT'.
+        lv_btween = lt_data_bk-high - lt_data_bk-low + 1.
+
+        DO lv_btween TIMES.
+          ls_bukrs = lt_data_bk-high.
+          SELECT SINGLE bukrs FROM t001 INTO CORRESPONDING FIELDS OF
+             ls_data WHERE bukrs = ls_bukrs.
+
+            IF sy-subrc eq 0.
+            APPEND ls_bukrs TO et_bukrs.
+          CLEAR ls_bukrs.
+            ENDIF.
+          lt_data_bk-high = lt_data_bk-high - 1.
+        ENDDO.
+        CONTINUE.
+
+      ELSEIF lt_data_bk-options EQ 'EQ'.
+        ls_bukrs = lt_data_bk-low.
+        APPEND ls_bukrs TO et_bukrs.
+        CLEAR ls_bukrs.
+
+      ENDIF.
+
+    ELSEIF lt_data_bk-sign EQ 'E'.
+
+      IF lt_data_bk-options EQ 'BT'.
+
+        lv_btween = lt_data_bk-high - lt_data_bk-low + 1.
+
+        DO lv_btween TIMES.
+          ls_bukrs = lt_data_bk-high.
+          DELETE et_bukrs WHERE bukrs EQ ls_bukrs.
+          CLEAR ls_bukrs.
+          lt_data_bk-high = lt_data_bk-high - 1.
+        ENDDO.
+        CONTINUE.
+
+      ELSEIF lt_data_bk-options EQ 'EQ'.
+        ls_bukrs = lt_data_bk-low.
+        DELETE et_bukrs WHERE bukrs EQ ls_bukrs.
+        CLEAR ls_bukrs.
+      ENDIF.
+
+    ENDIF.
+  ENDLOOP.
+
+
+  LOOP AT it_year INTO lt_data_gj.
+    IF lt_data_gj-sign EQ 'I'.
+      IF lt_data_gj-options EQ 'BT'.
+        lv_btween = lt_data_gj-high - lt_data_gj-low + 1.
+
+        DO lv_btween TIMES.
+          ls_year = lt_data_gj-high.
+          APPEND ls_year TO et_year.
+          CLEAR ls_year.
+          lt_data_gj-high = lt_data_gj-high - 1.
+        ENDDO.
+        CONTINUE.
+
+      ELSEIF lt_data_gj-options EQ 'EQ'.
+        ls_year = lt_data_gj-low.
+        APPEND ls_year TO et_year.
+        CLEAR ls_year.
+
+      ENDIF.
+
+    ELSEIF lt_data_gj-sign EQ 'E'.
+
+      IF lt_data_gj-options EQ 'BT'.
+
+        lv_btween = lt_data_gj-high - lt_data_gj-low + 1.
+
+        DO lv_btween TIMES.
+          ls_year = lt_data_gj-high.
+          DELETE et_year WHERE yil EQ ls_year.
+          CLEAR ls_year.
+          lt_data_gj-high = lt_data_gj-high - 1.
+        ENDDO.
+        CONTINUE.
+
+      ELSEIF lt_data_gj-options EQ 'EQ'.
+        ls_year = lt_data_gj-low.
+        DELETE et_year WHERE yil EQ ls_year.
+        CLEAR ls_year.
+      ENDIF.
+
+    ENDIF.
+  ENDLOOP.
+
+
+  LOOP AT it_monat INTO lt_data_mn.
+
+    IF lt_data_mn-sign EQ 'I'.
+      IF lt_data_mn-options EQ 'BT'.
+        lv_btween = lt_data_mn-high - lt_data_mn-low + 1.
+
+        DO lv_btween TIMES.
+          ls_monat = lt_data_mn-high.
+          APPEND ls_monat TO et_monat.
+          CLEAR ls_monat.
+          lt_data_mn-high = lt_data_mn-high - 1.
+        ENDDO.
+        CONTINUE.
+
+      ELSEIF lt_data_mn-options EQ 'EQ'.
+        ls_monat = lt_data_mn-low.
+        APPEND ls_monat TO et_monat.
+        CLEAR ls_monat.
+
+      ENDIF.
+
+    ELSEIF lt_data_mn-sign EQ 'E'.
+
+      IF lt_data_mn-options EQ 'BT'.
+
+        lv_btween = lt_data_mn-high - lt_data_mn-low + 1.
+
+        DO lv_btween TIMES.
+          ls_monat = lt_data_mn-high.
+          DELETE et_monat WHERE ay EQ ls_monat.
+          CLEAR ls_monat.
+          lt_data_mn-high = lt_data_mn-high - 1.
+        ENDDO.
+        CONTINUE.
+
+      ELSEIF lt_data_mn-options EQ 'EQ'.
+        ls_monat = lt_data_mn-low.
+        DELETE et_monat WHERE ay EQ ls_monat.
+        CLEAR ls_monat.
+      ENDIF.
+
+    ENDIF.
+
+  ENDLOOP.
+
+
+  SORT et_year  ASCENDING.
+  SORT et_monat ASCENDING.
+
+ENDFUNCTION.
