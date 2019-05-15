@@ -1,0 +1,214 @@
+REPORT zserkan_o_dynamic_table.
+
+TABLES: bkpf.
+
+FIELD-SYMBOLS: <t_ditab>   TYPE STANDARD TABLE, "Dynamic internal table
+               <fs_ditab>,"fs work area.
+               <fs_fldval> TYPE any. "fs to assign value.
+
+
+SELECTION-SCREEN: BEGIN OF BLOCK b1 WITH FRAME TITLE text-001.
+SELECT-OPTIONS: s_bukrs FOR bkpf-bukrs,
+                s_gjahr FOR bkpf-gjahr,
+                s_monat FOR bkpf-monat.
+SELECTION-SCREEN: END OF BLOCK b1.
+
+
+DATA: t_newtable     TYPE REF TO data,
+      t_newline      TYPE REF TO data,
+      t_fieldcat     TYPE lvc_t_fcat,
+      wa_it_fieldcat TYPE lvc_s_fcat,
+      wa_colno(2)    TYPE n,
+      gv_cnt(6)         TYPE n,
+      wa_flname(10)  TYPE c.
+
+
+START-OF-SELECTION.
+
+END-OF-SELECTION.
+  PERFORM fcat.
+  PERFORM display.
+
+*&---------------------------------------------------------------------*
+*&      Form  FCAT
+*&---------------------------------------------------------------------*
+*       text
+*----------------------------------------------------------------------*
+*  -->  p1        text
+*  <--  p2        text
+*----------------------------------------------------------------------*
+FORM fcat .
+
+  TYPES: BEGIN OF ty_year,
+    YIL TYPE bkpf-GJAHR,
+   END OF ty_year.
+
+   DATA: ls_year TYPE ty_year,
+         et_year TYPE TABLE OF ty_year.
+
+  TYPES: BEGIN OF ty_monat,
+    AY TYPE bkpf-MONAT,
+   END OF ty_monat.
+
+   DATA: ls_monat TYPE ty_monat,
+         et_monat TYPE TABLE OF ty_monat.
+
+    TYPES: BEGIN OF ty_bukrs,
+    BUKRS TYPE bkpf-bukrs,
+   END OF ty_bukrs.
+
+   DATA: ls_bukrs TYPE ty_bukrs,
+         et_bukrs TYPE TABLE OF ty_bukrs.
+
+
+  IF s_monat-high IS INITIAL.
+    s_monat-high = s_monat-low.
+  ENDIF.
+
+  IF s_gjahr-high IS INITIAL.
+    s_gjahr-high = 0.
+  ENDIF.
+
+
+ CALL FUNCTION 'ZSB_F_DATE_RANGE'
+  TABLES
+    IT_YEAR        = s_gjahr
+    IT_MONAT       = s_monat
+    IT_BUKRS       = s_bukrs
+    ET_YEAR        = et_year
+    ET_MONAT       = et_monat
+    ET_BUKRS       = et_bukrs.
+
+ IF s_bukrs is INITIAL and et_bukrs is INITIAL.
+
+   SELECT bukrs FROM t001 INTO CORRESPONDING FIELDS OF TABLE et_bukrs.
+
+ ENDIF.
+
+  TYPES: BEGIN OF ty_data,
+    bukrs TYPE t001-bukrs,
+    butxt TYPE t001-butxt,
+   END OF ty_data.
+
+  DATA: ls_data TYPE ty_data.
+
+  CLEAR wa_it_fieldcat.
+  wa_it_fieldcat-fieldname = 'BUKRS'.
+  wa_it_fieldcat-datatype  = 'CHAR'.
+  wa_it_fieldcat-scrtext_s = 'Ş.K.'.
+  wa_it_fieldcat-scrtext_l = 'Şirket Kodu'.
+  wa_it_fieldcat-intlen    = 4.
+  APPEND wa_it_fieldcat TO t_fieldcat.
+
+  CLEAR wa_it_fieldcat.
+  wa_it_fieldcat-fieldname = 'BUTXT'.
+  wa_it_fieldcat-datatype  = 'CHAR'.
+  wa_it_fieldcat-scrtext_s = 'Ş.T.'.
+  wa_it_fieldcat-scrtext_l = 'Şirket Tanımı'.
+  wa_it_fieldcat-intlen    = 25.
+  APPEND wa_it_fieldcat TO t_fieldcat.
+
+*fieldcat.
+  LOOP AT et_year INTO ls_year.
+    LOOP AT et_monat INTO ls_monat.
+      CLEAR wa_it_fieldcat.
+      CONCATENATE ls_year-yil 'x' ls_monat-ay INTO wa_flname.
+      wa_it_fieldcat-fieldname = wa_flname.
+      wa_it_fieldcat-datatype  = 'CHAR'.
+      wa_it_fieldcat-scrtext_s = wa_flname.
+      wa_it_fieldcat-intlen    = 10.
+      APPEND wa_it_fieldcat TO t_fieldcat.
+    ENDLOOP.
+  ENDLOOP.
+
+  CALL METHOD cl_alv_table_create=>create_dynamic_table
+    EXPORTING
+      it_fieldcatalog = t_fieldcat
+    IMPORTING
+      ep_table        = t_newtable.
+
+  ASSIGN t_newtable->* TO <t_ditab>.
+
+  CREATE DATA t_newline LIKE LINE OF <t_ditab>.
+  ASSIGN t_newline->* TO <fs_ditab>.
+  DATA: fieldname(20)  TYPE c,
+        fieldvalue(10) TYPE c,
+        index(3)       TYPE c.
+
+*cell values.
+  LOOP AT et_bukrs INTO ls_bukrs.
+    CLEAR: wa_flname, ls_data, <fs_ditab>.
+
+    SELECT SINGLE bukrs butxt FROM t001
+      INTO CORRESPONDING FIELDS OF ls_data
+          WHERE bukrs = ls_bukrs.
+
+    wa_flname = 'BUKRS'.
+    ASSIGN COMPONENT wa_flname OF STRUCTURE <fs_ditab> TO <fs_fldval>.
+    <fs_fldval> = ls_data-bukrs.
+
+    CLEAR: wa_flname.
+    wa_flname = 'BUTXT'.
+    ASSIGN COMPONENT wa_flname OF STRUCTURE <fs_ditab> TO <fs_fldval>.
+    <fs_fldval> = ls_data-butxt.
+
+    LOOP AT et_year INTO ls_year.
+      LOOP AT et_monat INTO ls_monat.
+        CLEAR: gv_cnt,fieldvalue.
+        PERFORM get_data USING ls_bukrs-bukrs ls_monat-ay ls_year-yil.
+        CLEAR: wa_flname.
+        MOVE ls_monat-ay TO wa_colno.
+        CONCATENATE ls_year-yil 'x' wa_colno INTO wa_flname.
+        CONCATENATE gv_cnt index INTO fieldvalue.
+        CONDENSE fieldvalue NO-GAPS.
+      ASSIGN COMPONENT wa_flname OF STRUCTURE <fs_ditab> TO <fs_fldval>.
+        <fs_fldval> = fieldvalue.
+      ENDLOOP.
+    ENDLOOP.
+  APPEND <fs_ditab> TO <t_ditab>.
+  ENDLOOP.
+
+SORT <t_ditab> ASCENDING .
+ENDFORM.
+*&---------------------------------------------------------------------*
+*&      Form  DISPLAY
+*&---------------------------------------------------------------------*
+*       text
+*----------------------------------------------------------------------*
+*  -->  p1        text
+*  <--  p2        text
+*----------------------------------------------------------------------*
+FORM display .
+
+  CALL FUNCTION 'REUSE_ALV_GRID_DISPLAY_LVC'
+    EXPORTING
+      it_fieldcat_lvc = t_fieldcat
+    TABLES
+      t_outtab        = <t_ditab>.
+
+ENDFORM.
+*&---------------------------------------------------------------------*
+*&      Form  GET_DATA
+*&---------------------------------------------------------------------*
+*       text
+*----------------------------------------------------------------------*
+*      -->P_LV_MN  text
+*      -->P_LV_GJ  text
+*----------------------------------------------------------------------*
+FORM get_data  USING    p_lv_sk
+                        p_lv_mn
+                        p_lv_gj.
+
+
+  SELECT COUNT(*) FROM bkpf INTO @DATA(lv_cnt)
+    WHERE bukrs EQ @p_lv_sk AND
+          gjahr EQ @p_lv_gj AND
+          monat EQ @p_lv_mn.
+  gv_cnt = lv_cnt.
+
+*  IF sy-subrc NE 0 .
+*    MESSAGE 'Uygun kayıt bulunamadı!' TYPE 'E' .
+*
+*  ENDIF.
+
+ENDFORM.
